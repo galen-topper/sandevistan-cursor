@@ -126,9 +126,11 @@ final class GhostManager {
 
             if let image = renderer.tintedCursor(hexColor: hexColor, opacity: CGFloat(opacity)) {
                 let size = image.size
+                // Offset by cursor hotspot so the ghost's tip aligns with the recorded position
+                let hotSpot = NSCursor.currentSystem?.hotSpot ?? NSPoint(x: 0, y: 0)
                 imageViews[i].image = image
                 windows[i].setFrame(
-                    NSRect(x: sample.position.x, y: sample.position.y - size.height, width: size.width, height: size.height),
+                    NSRect(x: sample.position.x - hotSpot.x, y: sample.position.y - (size.height - hotSpot.y), width: size.width, height: size.height),
                     display: false
                 )
                 windows[i].alphaValue = CGFloat(opacity)
