@@ -19,10 +19,10 @@ final class GhostManager {
     var isActive: Bool = false {
         didSet {
             if isActive {
-                NSCursor.hide()
+                CGDisplayHideCursor(CGMainDisplayID())
             } else {
                 hideAll()
-                NSCursor.unhide()
+                CGDisplayShowCursor(CGMainDisplayID())
             }
         }
     }
@@ -126,6 +126,8 @@ final class GhostManager {
 
     private func updateGhosts() {
         guard isActive else { return }
+        // Re-hide cursor every frame — macOS shows it again on mouse movement
+        CGDisplayHideCursor(CGMainDisplayID())
         let now = CACurrentMediaTime()
         let lifespanSec = Double(config.lifespanMs) / 1000.0
         let colors = config.colors
