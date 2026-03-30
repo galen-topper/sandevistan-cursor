@@ -18,19 +18,10 @@ final class GhostManager {
     var config: SandevistanConfig
     var isActive: Bool = false {
         didSet {
-            if isActive {
-                CGDisplayHideCursor(CGMainDisplayID())
-            } else {
-                hideAll()
-                CGDisplayShowCursor(CGMainDisplayID())
-            }
+            if !isActive { hideAll() }
         }
     }
     private var lastSampleTime: CFTimeInterval = 0
-    private var currentPosition: NSPoint = .zero
-    private var cursorWindow: NSWindow?
-    private var cursorImageView: NSImageView?
-    private var colorCycleStart: CFTimeInterval = 0
 
     init(config: SandevistanConfig) {
         self.config = config
@@ -73,22 +64,10 @@ final class GhostManager {
             imageViews.append(imageView)
         }
 
-        // Create cursor overlay window (above ghosts)
-        cursorWindow?.orderOut(nil)
-        let cw = makeOverlayWindow()
-        cw.level = NSWindow.Level(Int(CGWindowLevelForKey(.maximumWindow)) + 1)
-        let civ = NSImageView(frame: NSRect(x: 0, y: 0, width: 32, height: 32))
-        civ.imageScaling = .scaleProportionallyUpOrDown
-        cw.contentView = civ
-        cursorWindow = cw
-        cursorImageView = civ
-        colorCycleStart = CACurrentMediaTime()
-
         renderer.clearCache()
     }
 
     func addSample(position: NSPoint) {
-        currentPosition = position
         guard isActive else { return }
         let now = CACurrentMediaTime()
         let minInterval = Double(config.samplingIntervalMs) / 1000.0
@@ -126,8 +105,6 @@ final class GhostManager {
 
     private func updateGhosts() {
         guard isActive else { return }
-        // Re-hide cursor every frame — macOS shows it again on mouse movement
-        CGDisplayHideCursor(CGMainDisplayID())
         let now = CACurrentMediaTime()
         let lifespanSec = Double(config.lifespanMs) / 1000.0
         let colors = config.colors
@@ -164,37 +141,10 @@ final class GhostManager {
             }
         }
 
-        // Update color-cycling cursor overlay
-        updateCursorOverlay(now: now, colors: colors)
-    }
-
-    private func updateCursorOverlay(now: CFTimeInterval, colors: [String]) {
-        guard let cw = cursorWindow, let civ = cursorImageView, colors.count >= 2 else { return }
-
-        // Cycle through palette every 2 seconds
-        let cycleDuration = 2.0
-        let t = (now - colorCycleStart).truncatingRemainder(dividingBy: cycleDuration) / cycleDuration
-        let colorPosition = t * Double(colors.count - 1)
-        let colorIndex = min(Int(colorPosition), colors.count - 2)
-        let colorFraction = colorPosition - Double(colorIndex)
-        let hexColor = interpolateHex(colors[colorIndex], colors[colorIndex + 1], t: colorFraction)
-
-        if let image = renderer.tintedCursor(hexColor: hexColor, opacity: 1.0) {
-            let size = image.size
-            let hotSpot = NSCursor.currentSystem?.hotSpot ?? NSPoint(x: 0, y: 0)
-            civ.image = image
-            cw.setFrame(
-                NSRect(x: currentPosition.x - hotSpot.x, y: currentPosition.y - (size.height - hotSpot.y), width: size.width, height: size.height),
-                display: false
-            )
-            cw.alphaValue = 1.0
-            cw.orderFrontRegardless()
-        }
     }
 
     private func hideAll() {
         for w in windows { w.orderOut(nil) }
-        cursorWindow?.orderOut(nil)
         ringBuffer = Array(repeating: CursorSample(position: .zero, timestamp: 0), count: config.ghostCount)
         bufferIndex = 0
     }
