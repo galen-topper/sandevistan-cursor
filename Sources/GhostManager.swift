@@ -19,9 +19,10 @@ final class GhostManager {
     var isActive: Bool = false {
         didSet {
             if isActive {
-                cursorCatcherWindow?.orderFrontRegardless()
+                CGDisplayHideCursor(CGMainDisplayID())
             } else {
                 hideAll()
+                CGDisplayShowCursor(CGMainDisplayID())
             }
         }
     }
@@ -29,12 +30,7 @@ final class GhostManager {
     private var currentPosition: NSPoint = .zero
     private var cursorWindow: NSWindow?
     private var cursorImageView: NSImageView?
-    private var cursorCatcherWindow: NSWindow?
     private var colorCycleStart: CFTimeInterval = 0
-    private static let blankCursor: NSCursor = {
-        let image = NSImage(size: NSSize(width: 1, height: 1))
-        return NSCursor(image: image, hotSpot: .zero)
-    }()
 
     init(config: SandevistanConfig) {
         self.config = config
@@ -88,28 +84,6 @@ final class GhostManager {
         cursorImageView = civ
         colorCycleStart = CACurrentMediaTime()
 
-        // Create cursor catcher window — hides system cursor by placing a blank cursor
-        // This window does NOT ignore mouse events so macOS shows our custom cursor
-        cursorCatcherWindow?.orderOut(nil)
-        let catcherSize: CGFloat = 2
-        let catcher = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: catcherSize, height: catcherSize),
-            styleMask: .borderless,
-            backing: .buffered,
-            defer: false
-        )
-        catcher.isOpaque = false
-        catcher.backgroundColor = .clear
-        catcher.ignoresMouseEvents = false  // must accept mouse to control cursor
-        catcher.level = NSWindow.Level(Int(CGWindowLevelForKey(.maximumWindow)) + 2)
-        catcher.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary, .stationary]
-        catcher.hasShadow = false
-        // Set blank cursor on the catcher's content view
-        let catcherView = NSView(frame: NSRect(x: 0, y: 0, width: catcherSize, height: catcherSize))
-        catcherView.addCursorRect(catcherView.bounds, cursor: GhostManager.blankCursor)
-        catcher.contentView = catcherView
-        cursorCatcherWindow = catcher
-
         renderer.clearCache()
     }
 
@@ -152,11 +126,8 @@ final class GhostManager {
 
     private func updateGhosts() {
         guard isActive else { return }
-        // Move the cursor catcher to follow the mouse — keeps system cursor blank
-        if let catcher = cursorCatcherWindow {
-            catcher.setFrameOrigin(NSPoint(x: currentPosition.x - 1, y: currentPosition.y - 1))
-            catcher.orderFrontRegardless()
-        }
+        // Re-hide cursor every frame — macOS shows it again on mouse movement
+        CGDisplayHideCursor(CGMainDisplayID())
         let now = CACurrentMediaTime()
         let lifespanSec = Double(config.lifespanMs) / 1000.0
         let colors = config.colors
@@ -224,7 +195,6 @@ final class GhostManager {
     private func hideAll() {
         for w in windows { w.orderOut(nil) }
         cursorWindow?.orderOut(nil)
-        cursorCatcherWindow?.orderOut(nil)
         ringBuffer = Array(repeating: CursorSample(position: .zero, timestamp: 0), count: config.ghostCount)
         bufferIndex = 0
     }
